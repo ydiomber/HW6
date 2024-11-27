@@ -1,0 +1,8 @@
+"0","nc_sc_data <- nc_sc_data %>%"
+"0","  mutate(Species = str_extract(ScientificName, ""(?<= )[a-z]+""))"
+"0",""
+"0","species_count <- nc_sc_data %>%"
+"0","  group_by(Genus) %>%"
+"0","  summarise(SpeciesCount = n_distinct(Species)) %>%"
+"0","  arrange(desc(SpeciesCount))"
+"0","print(species_count)"

@@ -1,0 +1,233 @@
+---
+title: "Part2"
+format: html
+editor: visual
+---
+
+## STREET TREES DISRIBUTION ANALYSIS
+
+## Running Code
+
+```{r}
+library(tidyverse)
+library(stringr)
+library(ggplot2)
+library(dplyr)
+library(stringr)
+```
+
+## Data Preparation
+
+```{r}
+tree_data <- read_csv("C:/Users/Collins/Desktop/Freelancer/Kevin_2/Assignment2/Assignment2/TS3_Raw_tree_data.csv", show_col_types = FALSE)
+str(tree_data)
+
+```
+
+```{r}
+glimpse(tree_data)
+```
+
+```{r}
+colSums(is.na(tree_data))
+```
+
+##Question 1 #How many records are there in each state (include a table or bar plot)?
+
+```{r}
+city_state_data <- tree_data %>%
+  mutate(
+    State = str_extract(City, "[A-Z]{2}$")
+  ) %>%
+  select(City, State) %>% 
+  distinct()              
+
+print(city_state_data, n = Inf)
+```
+
+```{r}
+colnames(tree_data)
+```
+
+```{r}
+merged_data <- tree_data %>%
+  left_join(city_state_data, by = "City")
+
+state_counts <- merged_data %>%
+  filter(!is.na(State)) %>% # Ensure valid State entries
+  group_by(State) %>%
+  summarise(RecordCount = n(), .groups = "drop") %>%
+  arrange(desc(RecordCount))
+
+# Print the results
+print("Record Counts by State:")
+print(state_counts, n = Inf)
+```
+
+```{r}
+ggplot(state_counts, aes(x = reorder(State, -RecordCount), y = RecordCount)) +
+  geom_bar(stat = "identity", fill = "skyblue") +  
+  theme_minimal() +                              
+  labs(
+    title = "Record Counts by State",
+    x = "State",
+    y = "Record Count"
+  ) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) 
+```
+
+## Question 2: What cities did they collect data from in North and South Carolina? \[3 points\]
+
+```{r}
+
+nc_sc_data <- merged_data %>%
+  filter(State %in% c("NC", "SC"))
+
+
+cities <- nc_sc_data %>%
+  distinct(City) %>%
+  pull(City)
+
+
+print(cities)
+
+```
+
+Therefore the cities that they collected data from are Charleston and Charlotte.
+
+##Question 3: What genus of trees has the largest crown diameter in North and South Carolina? \[3 points\]
+
+```{r}
+nc_sc_data <- merged_data %>%
+  mutate(Genus = str_extract(ScientificName, "^[^ ]+"))
+
+genus_crown <- nc_sc_data %>%
+  group_by(Genus) %>%
+  summarise(AverageCrown = mean(`AvgCdia (m)`, na.rm = TRUE)) %>%
+  arrange(desc(AverageCrown))
+largest_crown_genus <- genus_crown %>%
+  slice_max(AverageCrown, n = 1)
+print(largest_crown_genus)
+
+
+```
+
+```{r}
+ggplot(genus_crown, aes(x = reorder(Genus, -AverageCrown), y = AverageCrown)) +
+  geom_bar(stat = "identity", fill = "skyblue") +
+  geom_text(
+    aes(label = ifelse(Genus == largest_crown_genus$Genus, round(AverageCrown, 2), "")),
+    vjust = -0.5,
+    color = "red",
+    size = 3
+  ) +
+  theme_minimal() +
+  labs(
+    title = "Average Crown Size by Genus (NC & SC)",
+    x = "Genus",
+    y = "Average Crown Diameter (m)"
+  ) +
+  theme(axis.text.x = element_text(angle = 75, hjust = 1)) +
+  annotate(
+    "text",
+    x = largest_crown_genus$Genus,
+    y = largest_crown_genus$AverageCrown + 0.5,
+    label = paste("Largest:", largest_crown_genus$Genus),
+    color = "red",
+    fontface = "bold"
+  )
+```
+
+From the above analysis its evident that the Samanea Species has the largest crown diameter of 17.704
+
+##Extra Credit #1 Older trees, of course, have larger crowns. Are there differences in the average age of the different genera of trees in the dataset? Might this explain the results of the previous question? \[1 point\]
+
+```{r}
+age_analysis <- nc_sc_data %>%
+  group_by(Genus) %>%
+  summarise(AverageAge = mean(Age, na.rm = TRUE), AverageCrown = mean(`AvgCdia (m)`, na.rm = TRUE)) %>%
+  arrange(desc(AverageCrown))
+
+ggplot(age_analysis, aes(x = AverageAge, y = AverageCrown)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  labs(title = "Relationship Between Age and Crown Size", x = "Average Age", y = "Average Crown Size") +
+  theme_minimal()
+```
+
+*Explanation:* From the above analysis it can be noted that the regression plot slopes upward which indicates that older trees tend to have larger crowns on average. This also indicates that there has been a large variance on the crown size and this might be due to factors such as growing conditions, and environmental stresses. #Recommending the Genus that produces the largest Crown Quickly
+
+```{r}
+merged_data <- merged_data %>%
+  mutate(Genus = str_extract(ScientificName, "^[^ ]+"))
+genus_analysis <- merged_data %>%
+  group_by(Genus) %>%
+  summarise(
+    AverageCrown = mean(`AvgCdia (m)`, na.rm = TRUE),
+    AverageAge = mean(Age, na.rm = TRUE)
+  ) %>%
+  filter(!is.na(AverageCrown), !is.na(AverageAge)) 
+genus_analysis <- genus_analysis %>%
+  mutate(CrownToAgeRatio = AverageCrown / AverageAge) %>%
+  arrange(desc(CrownToAgeRatio))
+
+# View the top candidate
+top_genus <- genus_analysis %>%
+  slice_max(CrownToAgeRatio, n = 1)
+
+print(top_genus)
+```
+
+```{r}
+ggplot(genus_analysis, aes(x = reorder(Genus, -CrownToAgeRatio), y = CrownToAgeRatio)) +
+  geom_bar(stat = "identity", fill = ifelse(genus_analysis$Genus == top_genus$Genus, "red", "skyblue")) +
+  theme_minimal() +
+  labs(
+    title = "Crown-to-Age Ratio by Genus",
+    x = "Genus",
+    y = "Crown-to-Age Ratio"
+  ) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  geom_text(
+    aes(label = ifelse(Genus == top_genus$Genus, round(CrownToAgeRatio, 2), "")),
+    vjust = -0.5,
+    color = "black",
+    size = 3
+  ) +
+  annotate(
+    "text",
+    x = which(genus_analysis$Genus == top_genus$Genus),
+    y = top_genus$CrownToAgeRatio + 0.1,
+    label = paste("Top Genus:", top_genus$Genus),
+    color = "red",
+    fontface = "bold"
+  )
+```
+
+#Explanation From the above analysis the data was prepared by filtering only the NC and SC states and we extracted the genus from the ScientificName Column. From the date we were able to calculate th Age and the AvgCdia (m). From here we were able to get the genera that produces the large crowns quickly. Therefore the recommended genus was Morus.
+
+#2. Species Analysis
+
+```{r}
+nc_sc_data <- nc_sc_data %>%
+  mutate(Species = str_extract(ScientificName, "(?<= )[a-z]+"))
+
+species_count <- nc_sc_data %>%
+  group_by(Genus) %>%
+  summarise(SpeciesCount = n_distinct(Species)) %>%
+  arrange(desc(SpeciesCount))
+print(species_count)
+```
+
+```{r}
+ggplot(species_count, aes(x = reorder(Genus, -SpeciesCount), y = SpeciesCount)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  theme_minimal() +
+  labs(
+    title = "Species Count by Genus (NC & SC)",
+    x = "Genus",
+    y = "Number of Distinct Species"
+  ) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  geom_text(aes(label = SpeciesCount), vjust = -0.5, size = 3)
+```
